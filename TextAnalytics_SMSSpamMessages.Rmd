@@ -1,0 +1,177 @@
+---
+title: "Short Message Classification"
+author: "Wedam Nyaaba"
+date: "March 25, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+&nbsp;
+&nbsp;
+
+**Required Packages**:
+
+- magrittr: forward pipe operator
+- stringr: string manipulation
+- dplyr: Data Wrangling
+- tm: text mining
+- ggplot2: data visualization
+
+
+
+\newpage
+
+```{r}
+# Clean the environment
+rm(list = ls())
+library(magrittr)
+
+```
+
+# 1. Read and Transform Data
+
+The lines of the text file (SMSSpamCollection.txt) are read into a character vector from which we can extract information to create a data frame.
+
+```{r}
+line <- readLines("SMSSpamCollection.txt")
+
+```
+
+Preview the structure of line
+
+```{r}
+str(line)
+```
+Show the first 20 lines
+
+```{r}
+head(line,20)
+```
+Remove non-character lines
+```{r}
+line <- line[trimws(line)!=""]
+
+head(line)
+```
+
+Create a data frame
+```{r}
+# Use line index as message ID 
+ID <- c(1:length(line))
+df <- data.frame(ID)
+head(df)
+```
+Extraction of text contents is achieved by the **word** function in **stringr** package.
+```{r}
+library(stringr)
+# Extract the contents of each spam message to be save under a new column (Text) in df
+df$Text <- word(line, 2, -1, sep = fixed('\t'))
+head(df)
+```
+ 
+```{r}
+# Extract the category of each spam message to be save under a new column (Class) in df
+df$Class <- word(line, 1, sep = fixed('\t'))
+
+head(df)
+```
+
+```{r}
+# Remove the line object from the current environment
+rm(line)
+```
+
+# 2. Text Analysis
+
+## 2.1 Create a document object
+```{r}
+# Load tm package
+library(tm)
+
+```
+
+```{r}
+for (i in 1:nrow(df)){
+  
+  document <- PlainTextDocument(x = df$Text[i],author = "Unknown",
+                                id = paste0("Doc",df$ID[i]),
+                                description = paste0("message content of SMS ",df$ID[i]),
+                                heading = "SMS Spam Message",
+                                origin = "www.dt.fee.unicamp",
+                                language = "en_US")
+  # Assign a unique name to each document 
+               assign(paste0('SMS',df$ID[i]),document)
+}
+```
+
+```{r}
+# Create a document collection, aka corpus
+
+dfCorpus <- Corpus(VectorSource(df$Text))
+
+inspect(dfCorpus)
+```
+
+## 2.2 Text data transformation
+
+```{r}
+# strip whitspace from the corpus
+dfCorpus <- tm_map(dfCorpus, stripWhitespace)
+
+# convert uppercase to lowercase 
+dfCorpus <- tm_map(dfCorpus, content_transformer(tolower))
+
+# remove numbers from the document collection
+dfCorpus <- tm_map(dfCorpus, removeNumbers)
+
+# remove punctuation from the document collection
+dfCorpus <- tm_map(dfCorpus, removePunctuation)
+
+# using a standard list, remove English stopwords from the document collection
+dfCorpus <- tm_map(dfCorpus,removeWords, stopwords("english"))
+
+# Stem
+dfCorpus <- tm_map(dfCorpus, stemDocument, language = "english")  
+
+inspect(dfCorpus) 
+```
+
+## 2.3 Create a terms-documents matrix
+
+Here, a bag of words assumption is considered in creating the matrix from the dfCorpus object
+```{r}
+tdm <- TermDocumentMatrix(dfCorpus)
+inspect(tdm)
+```
+```{r}
+examine.tdm <- removeSparseTerms(tdm, sparse = 0.25)
+top.words <- Terms(examine.tdm)
+print(top.words) 
+```
+
+Save movie SMS documents and document collection (corpus) in order to reuse them for further data analysis.
+```{r}
+save("df","dfCorpus","tdm", file = "SMS_Spam_data.Rdata")
+```
+
+## 2.4 Create a word cloud from corpus
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+# Word cloud for the whole copus (40 documents)
+wordcloud(dfCorpus, 
+          max.words = 150,
+          random.order = FALSE,
+          colors = brewer.pal(8, "Dark2"))
+
+```
+
+
+
+
+
